@@ -51,7 +51,7 @@ async function run() {
                             res.send({ isCorrect: true });
                         }
                         else {
-                            res.send({ isCorrect: false })
+                            res.send({ message : 'Wrong Password'})
                         }
 
                     })
@@ -73,7 +73,7 @@ async function run() {
                             res.send({ isCorrect: true });
                         }
                         else {
-                            res.send({ isCorrect: false })
+                            res.send({ message : 'Wrong Password'})
                         }
 
                     })
