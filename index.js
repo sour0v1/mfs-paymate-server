@@ -3,7 +3,7 @@ const app = express();
 const cors = require('cors');
 require('dotenv').config();
 const bycrypt = require('bcryptjs')
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -28,7 +28,60 @@ async function run() {
         await client.connect();
         const database = client.db("paymate");
         const userCollection = database.collection('users');
-        const agentCollection = database.collection('agents');
+        // const agentCollection = database.collection('agents');
+        const verifiedAgents = database.collection('verifiedAgents')
+
+        app.get('/user-info', async (req, res) => {
+            const { userIdentity } = req.query;
+            // console.log(userIdentity);
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+
+            if (checkMail) {
+                const query = { email: userIdentity }
+                const result = await userCollection.findOne(query);
+                res.send(result);
+            }
+            else {
+                const query = { phone: userIdentity };
+                const result = await userCollection.findOne(query);
+                res.send(result);
+            }
+        })
+
+        // admin
+        app.get('/all-agents', async (req, res) => {
+            const query = { role: 'agent' }
+            const result = await userCollection.find(query).toArray()
+            res.send(result);
+        })
+
+        app.get('/check-balance', async (req, res) => {
+            const {email} = req.query;
+            console.log(email);
+            const query = {email : email};
+            const result = await userCollection.findOne(query);
+            console.log(result)
+            const netBalance = result?.balance;
+            res.send({balance : netBalance});
+        })
+
+        app.post('/verify-agent', async (req, res) => {
+            const { id } = req.query;
+            console.log(id);
+            const query = { _id: new ObjectId(id) };
+
+            const updDoc = {
+                $set: {
+                    verified: true,
+                    balance : 10000,
+                }
+            }
+
+            const updInfo = await userCollection.updateOne(query, updDoc);
+            console.log(updInfo);
+        })
 
         app.post('/log-user', async (req, res) => {
             const user = req.body;
@@ -44,20 +97,23 @@ async function run() {
                 console.log('email query -', query);
                 const result = await userCollection.findOne(query);
                 console.log(result);
-                if (result) {
+                if (result?.verified) {
                     bycrypt.compare(password, result?.password, (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
                             res.send({ isCorrect: true });
                         }
                         else {
-                            res.send({ message : 'Wrong Password'})
+                            res.send({ message: 'Wrong Password' })
                         }
 
                     })
                 }
-                else{
-                    res.send({message : 'This email is not registered.'})
+                else if (!result?.verified) {
+                    res.send({ message: 'Not verified. Try later' })
+                }
+                else {
+                    res.send({ message: 'This email is not registered.' })
                 }
 
             }
@@ -66,20 +122,23 @@ async function run() {
                 console.log(query);
                 const result = await userCollection.findOne(query);
                 console.log(result);
-                if (result) {
+                if (result?.verified) {
                     bycrypt.compare(password, result?.password, (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
                             res.send({ isCorrect: true });
                         }
                         else {
-                            res.send({ message : 'Wrong Password'})
+                            res.send({ message: 'Wrong Password' })
                         }
 
                     })
                 }
-                else{
-                    res.send({message : 'This Phone Number is not registered.'})
+                else if (!result?.verified) {
+                    res.send({ message: 'Not verified. Try later' })
+                }
+                else {
+                    res.send({ message: 'This Phone Number is not registered.' })
                 }
             }
 
@@ -90,18 +149,18 @@ async function run() {
             // console.log(password, role);
             const user = { name, phone, email, role };
 
-            const phoneQuery = {phone : phone};
-            const emailQuery = {email : email};
+            const phoneQuery = { phone: phone };
+            const emailQuery = { email: email };
 
             const phoneResult = await userCollection.findOne(phoneQuery);
-            if(phoneResult){
-                res.send({message : 'This phone number already exist'});
+            if (phoneResult) {
+                res.send({ message: 'This phone number already exist' });
                 return;
             }
 
             const emailResult = await userCollection.findOne(emailQuery);
-            if(emailResult){
-                res.send({message : 'This email already exist'});
+            if (emailResult) {
+                res.send({ message: 'This email already exist' });
                 return;
             }
 
@@ -129,6 +188,9 @@ async function run() {
                 })
             })
         })
+
+
+
 
 
 
