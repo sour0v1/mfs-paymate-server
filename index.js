@@ -57,6 +57,12 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/all-users', async (req, res) => {
+            const query = { role: 'user' }
+            const result = await userCollection.find(query).toArray()
+            res.send(result);
+        })
+
         app.get('/check-balance', async (req, res) => {
             const {email} = req.query;
             console.log(email);
@@ -65,6 +71,37 @@ async function run() {
             console.log(result)
             const netBalance = result?.balance;
             res.send({balance : netBalance});
+        })
+
+        app.get('/user/check-number', async (req, res) => {
+            const {phone} = req.query;
+            console.log(phone);
+            const query = {phone : phone}
+            const findPhone = await userCollection.findOne(query);
+            console.log(findPhone);
+
+            if(findPhone){
+                res.send({matched : true})
+            }
+
+            if(!findPhone){
+                res.send({message : 'Not registered this number'})
+            }
+        })
+        app.post('/verify-user', async (req, res) => {
+            const { id } = req.query;
+            console.log(id);
+            const query = { _id: new ObjectId(id) };
+
+            const updDoc = {
+                $set: {
+                    verified: true,
+                    balance : 100,
+                }
+            }
+
+            const updInfo = await userCollection.updateOne(query, updDoc);
+            console.log(updInfo);
         })
 
         app.post('/verify-agent', async (req, res) => {
@@ -109,9 +146,14 @@ async function run() {
 
                     })
                 }
+                else if (!result) {
+                    res.send({ message: 'Not Registered' })
+                }
+
                 else if (!result?.verified) {
                     res.send({ message: 'Not verified. Try later' })
                 }
+                
                 else {
                     res.send({ message: 'This email is not registered.' })
                 }
