@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 const bycrypt = require('bcryptjs')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const moment = require('moment');
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -28,8 +29,7 @@ async function run() {
         await client.connect();
         const database = client.db("paymate");
         const userCollection = database.collection('users');
-        // const agentCollection = database.collection('agents');
-        const verifiedAgents = database.collection('verifiedAgents')
+        const transactionCollection = database.collection('transactions');
 
         app.get('/user-info', async (req, res) => {
             const { userIdentity } = req.query;
@@ -64,30 +64,55 @@ async function run() {
         })
 
         app.get('/check-balance', async (req, res) => {
-            const {email} = req.query;
+            const { email } = req.query;
             console.log(email);
-            const query = {email : email};
+            const query = { email: email };
             const result = await userCollection.findOne(query);
             console.log(result)
             const netBalance = result?.balance;
-            res.send({balance : netBalance});
+            res.send({ balance: netBalance });
         })
 
         app.get('/user/check-number', async (req, res) => {
-            const {phone} = req.query;
+            const { phone } = req.query;
             console.log(phone);
-            const query = {phone : phone}
+            const query = { phone: phone }
             const findPhone = await userCollection.findOne(query);
             console.log(findPhone);
 
-            if(findPhone){
-                res.send({matched : true})
+            if (findPhone) {
+                res.send({ matched: true })
             }
 
-            if(!findPhone){
-                res.send({message : 'Not registered this number'})
+            if (!findPhone) {
+                res.send({ message: 'Not registered this number' })
             }
         })
+
+        app.get('/user/transaction', async (req, res) => {
+            const { userIdentity } = req.query;
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            console.log(checkMail);
+
+            const findResult = await userCollection.findOne(yourQuery);
+            // console.log(findResult?.phone);
+            const yourPhone = findResult?.phone;
+            const yourUpdQuery = { from: yourPhone }
+
+            const result = await transactionCollection.find(yourUpdQuery).toArray();
+            res.send(result);
+        })
+
         app.post('/verify-user', async (req, res) => {
             const { id } = req.query;
             console.log(id);
@@ -96,7 +121,7 @@ async function run() {
             const updDoc = {
                 $set: {
                     verified: true,
-                    balance : 100,
+                    balance: 1000,
                 }
             }
 
@@ -112,7 +137,7 @@ async function run() {
             const updDoc = {
                 $set: {
                     verified: true,
-                    balance : 10000,
+                    balance: 10000,
                 }
             }
 
@@ -153,7 +178,7 @@ async function run() {
                 else if (!result?.verified) {
                     res.send({ message: 'Not verified. Try later' })
                 }
-                
+
                 else {
                     res.send({ message: 'This email is not registered.' })
                 }
@@ -229,6 +254,121 @@ async function run() {
                     // }
                 })
             })
+        })
+
+        app.post('/user/confirm/send-money', async (req, res) => {
+            const { balance, password, phoneNumber, userIdentity } = req.body;
+            console.log(balance, password, phoneNumber, userIdentity);
+            const money = parseInt(balance);
+
+            const userQuery = { phone: phoneNumber };
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            const result = await userCollection.findOne(yourQuery);
+            console.log(result);
+
+            if (money < 50) {
+                console.log('Minimum balance is 50')
+                res.send({ message: 'Minimum balanced is 50' })
+                return;
+            }
+
+            if (money <= 100) {
+                console.log('Yeap');
+                if (money > result?.balance) {
+                    res.send({ message: 'Your current balance is low' });
+                    return;
+                }
+                // here1
+                const yourResult = await userCollection.findOne(yourQuery);
+
+                const yourUpdBalance = {
+                    $set: {
+                        balance: yourResult?.balance - money,
+                    }
+                }
+                const yourUpdResult = await userCollection.updateOne(yourQuery, yourUpdBalance);
+                console.log(yourUpdResult);
+
+                const userResult = await userCollection.findOne(userQuery);
+                if (yourUpdResult?.modifiedCount) {
+                    const userUpdBalance = {
+                        $set: {
+                            balance: userResult?.balance + money,
+                        }
+                    }
+                    const userUpdResult = await userCollection.updateOne(userQuery, userUpdBalance);
+                    if (userUpdResult?.modifiedCount) {
+                        const transactionInfo = {
+                            from: yourResult?.phone,
+                            to: userResult?.phone,
+                            balance: money,
+                            type: 'Send Money',
+                            date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                        }
+                        const transactionResult = await transactionCollection.insertOne(transactionInfo);
+                        if (transactionResult?.insertedId) {
+                            res.send(transactionResult);
+                        }
+                    }
+
+                }
+            }
+
+            if (money > 100) {
+                if (money + 5 > result?.balance) {
+                    console.log('low balance');
+                    res.send({ message: 'Your current balance is Low' });
+                    return;
+                }
+                else {
+                    // here2
+                    const yourResult = await userCollection.findOne(yourQuery);
+
+                    const yourUpdBalance = {
+                        $set: {
+                            balance: yourResult?.balance - money,
+                        }
+                    }
+                    const yourUpdResult = await userCollection.updateOne(yourQuery, yourUpdBalance);
+                    console.log(yourUpdResult);
+
+                    const userResult = await userCollection.findOne(userQuery);
+                    if (yourUpdResult?.modifiedCount) {
+                        const userUpdBalance = {
+                            $set: {
+                                balance: userResult?.balance + money,
+                            }
+                        }
+                        const userUpdResult = await userCollection.updateOne(userQuery, userUpdBalance);
+                        if (userUpdResult?.modifiedCount) {
+                            const transactionInfo = {
+                                from: yourResult?.phone,
+                                to: userResult?.phone,
+                                balance: money,
+                                type: 'Send Money',
+                                date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                            }
+                            const transactionResult = await transactionCollection.insertOne(transactionInfo);
+                            if (transactionResult?.insertedId) {
+                                res.send(transactionResult);
+                            }
+                        }
+
+                    }
+                }
+                console.log(result?.balance)
+
+            }
         })
 
 
