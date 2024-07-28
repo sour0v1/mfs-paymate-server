@@ -80,16 +80,16 @@ async function run() {
             const findPhone = await userCollection.findOne(query);
             console.log(findPhone);
 
-            if (findPhone) {
+            if (findPhone?.role === 'user') {
                 res.send({ matched: true })
             }
 
-            if (!findPhone) {
-                res.send({ message: 'Not registered this number' })
+            else {
+                res.send({ message: 'User not found' })
             }
         })
 
-        app.get('/user/transaction', async (req, res) => {
+        app.get('/user/transaction/send-money', async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -108,6 +108,30 @@ async function run() {
             // console.log(findResult?.phone);
             const yourPhone = findResult?.phone;
             const yourUpdQuery = { from: yourPhone }
+
+            const result = await transactionCollection.find(yourUpdQuery).toArray();
+            res.send(result);
+        })
+
+        app.get('/user/transaction/recieve-money', async (req, res) => {
+            const { userIdentity } = req.query;
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            console.log(checkMail);
+
+            const findResult = await userCollection.findOne(yourQuery);
+            // console.log(findResult?.phone);
+            const yourPhone = findResult?.phone;
+            const yourUpdQuery = { to: yourPhone }
 
             const result = await transactionCollection.find(yourUpdQuery).toArray();
             res.send(result);
@@ -276,99 +300,110 @@ async function run() {
             const result = await userCollection.findOne(yourQuery);
             console.log(result);
 
-            if (money < 50) {
-                console.log('Minimum balance is 50')
-                res.send({ message: 'Minimum balanced is 50' })
-                return;
-            }
-
-            if (money <= 100) {
-                console.log('Yeap');
-                if (money > result?.balance) {
-                    res.send({ message: 'Your current balance is low' });
-                    return;
-                }
-                // here1
-                const yourResult = await userCollection.findOne(yourQuery);
-
-                const yourUpdBalance = {
-                    $set: {
-                        balance: yourResult?.balance - money,
-                    }
-                }
-                const yourUpdResult = await userCollection.updateOne(yourQuery, yourUpdBalance);
-                console.log(yourUpdResult);
-
-                const userResult = await userCollection.findOne(userQuery);
-                if (yourUpdResult?.modifiedCount) {
-                    const userUpdBalance = {
-                        $set: {
-                            balance: userResult?.balance + money,
-                        }
-                    }
-                    const userUpdResult = await userCollection.updateOne(userQuery, userUpdBalance);
-                    if (userUpdResult?.modifiedCount) {
-                        const transactionInfo = {
-                            from: yourResult?.phone,
-                            to: userResult?.phone,
-                            balance: money,
-                            type: 'Send Money',
-                            date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
-                        }
-                        const transactionResult = await transactionCollection.insertOne(transactionInfo);
-                        if (transactionResult?.insertedId) {
-                            res.send(transactionResult);
-                        }
-                    }
-
-                }
-            }
-
-            if (money > 100) {
-                if (money + 5 > result?.balance) {
-                    console.log('low balance');
-                    res.send({ message: 'Your current balance is Low' });
+            bycrypt.compare(password, result?.password, async (err, response) => {
+                console.log('yes', response);
+                if (!response) {
+                    res.send({ message: 'Wrong Password' });
                     return;
                 }
                 else {
-                    // here2
-                    const yourResult = await userCollection.findOne(yourQuery);
-
-                    const yourUpdBalance = {
-                        $set: {
-                            balance: yourResult?.balance - money,
-                        }
+                    if (money < 50) {
+                        console.log('Minimum balance is 50')
+                        res.send({ message: 'Minimum balanced is 50' })
+                        return;
                     }
-                    const yourUpdResult = await userCollection.updateOne(yourQuery, yourUpdBalance);
-                    console.log(yourUpdResult);
 
-                    const userResult = await userCollection.findOne(userQuery);
-                    if (yourUpdResult?.modifiedCount) {
-                        const userUpdBalance = {
+                    if (money <= 100) {
+                        console.log('Yeap');
+                        if (money > result?.balance) {
+                            res.send({ message: 'Your current balance is low' });
+                            return;
+                        }
+                        // here1
+                        const yourResult = await userCollection.findOne(yourQuery);
+
+                        const yourUpdBalance = {
                             $set: {
-                                balance: userResult?.balance + money,
+                                balance: yourResult?.balance - money,
                             }
                         }
-                        const userUpdResult = await userCollection.updateOne(userQuery, userUpdBalance);
-                        if (userUpdResult?.modifiedCount) {
-                            const transactionInfo = {
-                                from: yourResult?.phone,
-                                to: userResult?.phone,
-                                balance: money,
-                                type: 'Send Money',
-                                date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
-                            }
-                            const transactionResult = await transactionCollection.insertOne(transactionInfo);
-                            if (transactionResult?.insertedId) {
-                                res.send(transactionResult);
-                            }
-                        }
+                        const yourUpdResult = await userCollection.updateOne(yourQuery, yourUpdBalance);
+                        console.log(yourUpdResult);
 
+                        const userResult = await userCollection.findOne(userQuery);
+                        if (yourUpdResult?.modifiedCount) {
+                            const userUpdBalance = {
+                                $set: {
+                                    balance: userResult?.balance + money,
+                                }
+                            }
+                            const userUpdResult = await userCollection.updateOne(userQuery, userUpdBalance);
+                            if (userUpdResult?.modifiedCount) {
+                                const transactionInfo = {
+                                    from: yourResult?.phone,
+                                    to: userResult?.phone,
+                                    balance: money,
+                                    type: 'Send Money',
+                                    date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                                }
+                                const transactionResult = await transactionCollection.insertOne(transactionInfo);
+                                if (transactionResult?.insertedId) {
+                                    res.send(transactionResult);
+                                }
+                            }
+
+                        }
                     }
                 }
-                console.log(result?.balance)
 
-            }
+                if (money > 100) {
+                    if (money + 5 > result?.balance) {
+                        console.log('low balance');
+                        res.send({ message: 'Your current balance is Low' });
+                        return;
+                    }
+                    else {
+                        // here2
+                        const yourResult = await userCollection.findOne(yourQuery);
+
+                        const yourUpdBalance = {
+                            $set: {
+                                balance: yourResult?.balance - (money + 5),
+                            }
+                        }
+                        const yourUpdResult = await userCollection.updateOne(yourQuery, yourUpdBalance);
+                        console.log(yourUpdResult);
+
+                        const userResult = await userCollection.findOne(userQuery);
+                        if (yourUpdResult?.modifiedCount) {
+                            const userUpdBalance = {
+                                $set: {
+                                    balance: userResult?.balance + money,
+                                }
+                            }
+                            const userUpdResult = await userCollection.updateOne(userQuery, userUpdBalance);
+                            if (userUpdResult?.modifiedCount) {
+                                const transactionInfo = {
+                                    from: yourResult?.phone,
+                                    to: userResult?.phone,
+                                    balance: money,
+                                    type: 'Send Money',
+                                    date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                                }
+                                const transactionResult = await transactionCollection.insertOne(transactionInfo);
+                                if (transactionResult?.insertedId) {
+                                    res.send(transactionResult);
+                                }
+                            }
+
+                        }
+                    }
+                    console.log(result?.balance)
+
+                }
+
+            })
+
         })
 
 
