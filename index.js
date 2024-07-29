@@ -26,10 +26,11 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
         const database = client.db("paymate");
         const userCollection = database.collection('users');
         const transactionCollection = database.collection('transactions');
+        const cashInRequestCollection = database.collection('cashInRequests');
 
         app.get('/user-info', async (req, res) => {
             const { userIdentity } = req.query;
@@ -88,6 +89,23 @@ async function run() {
                 res.send({ message: 'User not found' })
             }
         })
+        
+        app.get('/agent/check-number', async (req, res) => {
+            const { phone } = req.query;
+            console.log(phone);
+            const query = { phone: phone }
+            const findPhone = await userCollection.findOne(query);
+            console.log(findPhone);
+
+            if (findPhone?.role === 'agent') {
+                res.send({ matched: true })
+            }
+
+            else {
+                res.send({ message: 'Agent not found' })
+            }
+        })
+
 
         app.get('/user/transaction/send-money', async (req, res) => {
             const { userIdentity } = req.query;
@@ -137,6 +155,30 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/user/transaction/cash-in', async (req, res) => {
+            const { userIdentity } = req.query;
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            console.log(checkMail);
+
+            const findResult = await userCollection.findOne(yourQuery);
+            // console.log(findResult?.phone);
+            const yourPhone = findResult?.phone;
+            const yourUpdQuery = { from : yourPhone }
+
+            const result = await cashInRequestCollection.find(yourUpdQuery).toArray();
+            res.send(result);
+        })
+
         app.post('/verify-user', async (req, res) => {
             const { id } = req.query;
             console.log(id);
@@ -150,6 +192,7 @@ async function run() {
             }
 
             const updInfo = await userCollection.updateOne(query, updDoc);
+            res.send(updInfo);
             console.log(updInfo);
         })
 
@@ -166,7 +209,8 @@ async function run() {
             }
 
             const updInfo = await userCollection.updateOne(query, updDoc);
-            console.log(updInfo);
+            res.send(updInfo);
+            console.log('hmm', updInfo);
         })
 
         app.post('/log-user', async (req, res) => {
@@ -182,12 +226,13 @@ async function run() {
                 const query = { email: userIdentity };
                 console.log('email query -', query);
                 const result = await userCollection.findOne(query);
+                const userRole = result?.role;
                 console.log(result);
                 if (result?.verified) {
                     bycrypt.compare(password, result?.password, (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            res.send({ isCorrect: true });
+                            res.send({ isCorrect: true, role : userRole });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -212,12 +257,13 @@ async function run() {
                 const query = { phone: userIdentity };
                 console.log(query);
                 const result = await userCollection.findOne(query);
+                const userRole = result?.role;
                 console.log(result);
                 if (result?.verified) {
                     bycrypt.compare(password, result?.password, (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            res.send({ isCorrect: true });
+                            res.send({ isCorrect: true, role : userRole });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -307,7 +353,7 @@ async function run() {
                     return;
                 }
                 else {
-                    if (money < 50) {
+                    if (money <= 50) {
                         console.log('Minimum balance is 50')
                         res.send({ message: 'Minimum balanced is 50' })
                         return;
@@ -406,13 +452,61 @@ async function run() {
 
         })
 
+        app.post('/user/confirm/cash-in', async (req, res) => {
+            const { balance, password, phoneNumber, userIdentity } = req.body;
+            console.log(balance, password, phoneNumber, userIdentity);
+            const money = parseInt(balance);
+
+            const agentQuery = { phone: phoneNumber };
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            const result = await userCollection.findOne(yourQuery);
+            console.log(result);
+
+            bycrypt.compare(password, result?.password, async (err, response) => {
+                console.log('yes', response);
+                if (!response) {
+                    res.send({ message: 'Wrong Password' });
+                    return;
+                }
+                else {
+                    if (money <= 0) {
+                        console.log('Enter valid number');
+                        res.send({ message: 'Enter valid number' })
+                        return;
+                    }
+
+                    const requestInfo = {
+                        from : result?.phone,
+                        to : phoneNumber,
+                        balance : balance,
+                        date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                    }
+
+                    const requestResult = await cashInRequestCollection.insertOne(requestInfo);
+                    if(requestResult?.insertedId){
+                        res.send({insertedMessage : true});
+                    }
 
 
+                }
 
+            })
+
+        })
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
