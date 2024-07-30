@@ -205,6 +205,29 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/agent/transaction/cash-in', async (req, res) => {
+            const { userIdentity } = req.query;
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            const findResult = await userCollection.findOne(yourQuery);
+            // console.log(findResult?.phone);
+            const yourPhone = findResult?.phone;
+            const yourUpdQuery = { to: yourPhone, accepted : true }
+
+            const result = await cashInRequestCollection.find(yourUpdQuery).toArray();
+
+            return res.send(result);
+        })
+
         app.post('/verify-user', async (req, res) => {
             const { id } = req.query;
             console.log(id);
@@ -578,6 +601,7 @@ async function run() {
                         const updRequest = {
                             $set: {
                                 accepted: true,
+                                date : moment().format("dddd, MMMM Do YYYY, h:mm:ss a"),
                             }
                         }
                         const updReqResult = await cashInRequestCollection.updateOne(query, updRequest);
