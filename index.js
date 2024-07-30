@@ -26,7 +26,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        // await client.connect();
+        await client.connect();
         const database = client.db("paymate");
         const userCollection = database.collection('users');
         const transactionCollection = database.collection('transactions');
@@ -89,7 +89,7 @@ async function run() {
                 res.send({ message: 'User not found' })
             }
         })
-        
+
         app.get('/agent/check-number', async (req, res) => {
             const { phone } = req.query;
             console.log(phone);
@@ -104,6 +104,32 @@ async function run() {
             else {
                 res.send({ message: 'Agent not found' })
             }
+        })
+
+        app.get('/agent/cash-in-requests', async (req, res) => {
+            const { agent } = req.query;
+            console.log('ll', agent);
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(agent);
+            let agentQuery = ' ';
+            if (checkMail) {
+                agentQuery = { email: agent }
+            }
+            else {
+                agentQuery = { phone: agent }
+            }
+
+            const agentInfo = await userCollection.findOne(agentQuery);
+            const agentPhone = agentInfo?.phone;
+            console.log(agentPhone)
+            const agentFinalQuery = { to: agentPhone };
+
+            const requestInfo = await cashInRequestCollection.find(agentFinalQuery).toArray();
+            // console.log(requestInfo)
+            res.send(requestInfo);
+
+
         })
 
 
@@ -173,7 +199,7 @@ async function run() {
             const findResult = await userCollection.findOne(yourQuery);
             // console.log(findResult?.phone);
             const yourPhone = findResult?.phone;
-            const yourUpdQuery = { from : yourPhone }
+            const yourUpdQuery = { from: yourPhone }
 
             const result = await cashInRequestCollection.find(yourUpdQuery).toArray();
             res.send(result);
@@ -232,7 +258,7 @@ async function run() {
                     bycrypt.compare(password, result?.password, (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            res.send({ isCorrect: true, role : userRole });
+                            res.send({ isCorrect: true, role: userRole });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -263,7 +289,7 @@ async function run() {
                     bycrypt.compare(password, result?.password, (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            res.send({ isCorrect: true, role : userRole });
+                            res.send({ isCorrect: true, role: userRole });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -486,15 +512,15 @@ async function run() {
                     }
 
                     const requestInfo = {
-                        from : result?.phone,
-                        to : phoneNumber,
-                        balance : balance,
+                        from: result?.phone,
+                        to: phoneNumber,
+                        balance: balance,
                         date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
                     }
 
                     const requestResult = await cashInRequestCollection.insertOne(requestInfo);
-                    if(requestResult?.insertedId){
-                        res.send({insertedMessage : true});
+                    if (requestResult?.insertedId) {
+                        res.send({ insertedMessage: true });
                     }
 
 
@@ -504,9 +530,68 @@ async function run() {
 
         })
 
+        app.post('/agent/confirm/cash-in-request', async (req, res) => {
+            const { id } = req.query;
+            console.log(id);
+            const query = { _id: new ObjectId(id) };
+
+            const result = await cashInRequestCollection.findOne(query);
+            console.log(result);
+
+            const agentPhone = result?.to;
+            const userPhone = result?.from;
+
+            const balance = result?.balance;
+
+            const agentQuery = { phone: agentPhone };
+            const userQuery = { phone: userPhone }
+
+            // agent
+            const agent = await userCollection.findOne(agentQuery)
+            const agentCurrentBalance = agent?.balance;
+            console.log(agentCurrentBalance)
+
+            if (agentCurrentBalance < balance) {
+                return res.send({ message: 'Your current balance is low' });
+            }
+
+            else {
+                const agentUpdBalance = {
+                    $set: {
+                        balance: parseInt(agentCurrentBalance) - parseInt(balance)
+                    }
+                }
+                const agentResult = await userCollection.updateOne(agentQuery, agentUpdBalance);
+                if (agentResult?.modifiedCount) {
+                    // user
+                    const user = await userCollection.findOne(userQuery)
+                    const userCurrentBalance = user?.balance;
+                    console.log(userCurrentBalance)
+
+                    const userUpdBalance = {
+                        $set: {
+                            balance: parseInt(userCurrentBalance) + parseInt(balance)
+                        }
+                    }
+                    const userResult = await userCollection.updateOne(userQuery, userUpdBalance);
+                    if (userResult?.modifiedCount) {
+                        const updRequest = {
+                            $set: {
+                                accepted: true,
+                            }
+                        }
+                        const updReqResult = await cashInRequestCollection.updateOne(query, updRequest);
+                        res.send(updReqResult);
+                    }
+                }
+            }
+
+
+        })
+
 
         // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
+        await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
