@@ -31,6 +31,7 @@ async function run() {
         const userCollection = database.collection('users');
         const transactionCollection = database.collection('transactions');
         const cashInRequestCollection = database.collection('cashInRequests');
+        const cashOutRequestCollection = database.collection('cashOutRequests');
 
         app.get('/user-info', async (req, res) => {
             const { userIdentity } = req.query;
@@ -62,6 +63,11 @@ async function run() {
             const query = { role: 'user' }
             const result = await userCollection.find(query).toArray()
             res.send(result);
+        })
+
+        app.get('/verify/logged-in', async (req, res) => {
+            const { user } = req.query;
+            console.log(user);
         })
 
         app.get('/check-balance', async (req, res) => {
@@ -221,7 +227,7 @@ async function run() {
             const findResult = await userCollection.findOne(yourQuery);
             // console.log(findResult?.phone);
             const yourPhone = findResult?.phone;
-            const yourUpdQuery = { to: yourPhone, accepted : true }
+            const yourUpdQuery = { to: yourPhone, accepted: true }
 
             const result = await cashInRequestCollection.find(yourUpdQuery).toArray();
 
@@ -271,6 +277,14 @@ async function run() {
             const checkMail = emailRegEx.test(userIdentity);
 
             console.log(checkMail);
+
+            // // for private route
+            // const updateLogInfo = {
+            //     $set: {
+            //         loggedIn: true,
+            //     }
+            // }
+
             if (checkMail) {
                 const query = { email: userIdentity };
                 console.log('email query -', query);
@@ -278,10 +292,11 @@ async function run() {
                 const userRole = result?.role;
                 console.log(result);
                 if (result?.verified) {
-                    bycrypt.compare(password, result?.password, (err, response) => {
+                    bycrypt.compare(password, result?.password, async (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            res.send({ isCorrect: true, role: userRole });
+                            // const loggedResult = await userCollection.updateOne(query, updateLogInfo)
+                            res.send({ isCorrect: true, role: userRole, });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -309,9 +324,10 @@ async function run() {
                 const userRole = result?.role;
                 console.log(result);
                 if (result?.verified) {
-                    bycrypt.compare(password, result?.password, (err, response) => {
+                    bycrypt.compare(password, result?.password, async (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
+                            // const loggedResult = await userCollection.updateOne(query, updateLogInfos)
                             res.send({ isCorrect: true, role: userRole });
                         }
                         else {
@@ -501,12 +517,12 @@ async function run() {
 
         })
 
-        app.post('/user/confirm/cash-in', async (req, res) => {
+        app.post('/user/request/cash-in', async (req, res) => {
             const { balance, password, phoneNumber, userIdentity } = req.body;
             console.log(balance, password, phoneNumber, userIdentity);
             const money = parseInt(balance);
 
-            const agentQuery = { phone: phoneNumber };
+            // const agentQuery = { phone: phoneNumber };
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             const checkMail = emailRegEx.test(userIdentity);
@@ -542,6 +558,64 @@ async function run() {
                     }
 
                     const requestResult = await cashInRequestCollection.insertOne(requestInfo);
+                    if (requestResult?.insertedId) {
+                        res.send({ insertedMessage: true });
+                    }
+
+
+                }
+
+            })
+
+        })
+
+        app.post('/user/request/cash-out', async (req, res) => {
+            const { balance, password, phoneNumber, userIdentity } = req.body;
+            console.log(balance, password, phoneNumber, userIdentity);
+            const money = parseInt(balance);
+
+            // const agentQuery = { phone: phoneNumber };
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            const result = await userCollection.findOne(yourQuery);
+            console.log(result);
+
+            bycrypt.compare(password, result?.password, async (err, response) => {
+                console.log('yes', response);
+                if (!response) {
+                    res.send({ message: 'Wrong Password' });
+                    return;
+                }
+                else {
+                    if (money <= 0) {
+                        console.log('Enter valid number');
+                        res.send({ message: 'Enter valid number' })
+                        return;
+                    }
+
+                    const totalMoney = money * (1.5 / 100);
+
+                    if(!(totalMoney <= result?.balance)){
+                        return res.send({message : 'Low Balance'})
+                    }
+
+                    const requestInfo = {
+                        from: result?.phone,
+                        to: phoneNumber,
+                        balance: balance,
+                        date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                    }
+
+                    const requestResult = await cashOutRequestCollection.insertOne(requestInfo);
                     if (requestResult?.insertedId) {
                         res.send({ insertedMessage: true });
                     }
@@ -601,7 +675,7 @@ async function run() {
                         const updRequest = {
                             $set: {
                                 accepted: true,
-                                date : moment().format("dddd, MMMM Do YYYY, h:mm:ss a"),
+                                date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a"),
                             }
                         }
                         const updReqResult = await cashInRequestCollection.updateOne(query, updRequest);
@@ -612,6 +686,30 @@ async function run() {
 
 
         })
+
+        // app.post('/logout', async (req, res) => {
+        //     const { user } = req.query;
+        //     console.log(user)
+
+        //     const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        //     const checkMail = emailRegEx.test(user);
+        //     let yourQuery = ' ';
+        //     if (checkMail) {
+        //         yourQuery = { email: user }
+        //     }
+        //     else {
+        //         yourQuery = { phone: user }
+        //     }
+
+        //     const updatedLogInfo = {
+        //         $set : {
+        //             loggedIn : false,
+        //         }
+        //     }
+
+        //     const result = await userCollection.updateOne(yourQuery, updatedLogInfo)
+        //     res.send(result);
+        // })
 
 
         // Send a ping to confirm a successful connection
