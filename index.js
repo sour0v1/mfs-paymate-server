@@ -4,7 +4,8 @@ const cors = require('cors');
 require('dotenv').config();
 const bycrypt = require('bcryptjs')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const moment = require('moment');
+// const moment = require('moment');
+const moment = require('moment-timezone')
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -138,6 +139,32 @@ async function run() {
 
         })
 
+        app.get('/agent/cash-out-requests', async (req, res) => {
+            const { agent } = req.query;
+            console.log('ll', agent);
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(agent);
+            let agentQuery = ' ';
+            if (checkMail) {
+                agentQuery = { email: agent }
+            }
+            else {
+                agentQuery = { phone: agent }
+            }
+
+            const agentInfo = await userCollection.findOne(agentQuery);
+            const agentPhone = agentInfo?.phone;
+            console.log(agentPhone)
+            const agentFinalQuery = { to: agentPhone };
+
+            const requestInfo = await cashOutRequestCollection.find(agentFinalQuery).toArray();
+            // console.log(requestInfo)
+            res.send(requestInfo);
+
+
+        })
+
 
         app.get('/user/transaction/send-money', async (req, res) => {
             const { userIdentity } = req.query;
@@ -211,6 +238,30 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/user/transaction/cash-out', async (req, res) => {
+            const { userIdentity } = req.query;
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            console.log(checkMail);
+
+            const findResult = await userCollection.findOne(yourQuery);
+            // console.log(findResult?.phone);
+            const yourPhone = findResult?.phone;
+            const yourUpdQuery = { from: yourPhone }
+
+            const result = await cashOutRequestCollection.find(yourUpdQuery).toArray();
+            res.send(result);
+        })
+
         app.get('/agent/transaction/cash-in', async (req, res) => {
             const { userIdentity } = req.query;
 
@@ -230,6 +281,29 @@ async function run() {
             const yourUpdQuery = { to: yourPhone, accepted: true }
 
             const result = await cashInRequestCollection.find(yourUpdQuery).toArray();
+
+            return res.send(result);
+        })
+
+        app.get('/agent/transaction/cash-out', async (req, res) => {
+            const { userIdentity } = req.query;
+
+            const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const checkMail = emailRegEx.test(userIdentity);
+            let yourQuery = ' ';
+            if (checkMail) {
+                yourQuery = { email: userIdentity }
+            }
+            else {
+                yourQuery = { phone: userIdentity }
+            }
+
+            const findResult = await userCollection.findOne(yourQuery);
+            // console.log(findResult?.phone);
+            const yourPhone = findResult?.phone;
+            const yourUpdQuery = { to: yourPhone, accepted: true }
+
+            const result = await cashOutRequestCollection.find(yourUpdQuery).toArray();
 
             return res.send(result);
         })
@@ -455,7 +529,7 @@ async function run() {
                                     to: userResult?.phone,
                                     balance: money,
                                     type: 'Send Money',
-                                    date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                                    date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                                 }
                                 const transactionResult = await transactionCollection.insertOne(transactionInfo);
                                 if (transactionResult?.insertedId) {
@@ -499,7 +573,7 @@ async function run() {
                                     to: userResult?.phone,
                                     balance: money,
                                     type: 'Send Money',
-                                    date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                                    date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                                 }
                                 const transactionResult = await transactionCollection.insertOne(transactionInfo);
                                 if (transactionResult?.insertedId) {
@@ -554,7 +628,7 @@ async function run() {
                         from: result?.phone,
                         to: phoneNumber,
                         balance: balance,
-                        date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                        date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                     }
 
                     const requestResult = await cashInRequestCollection.insertOne(requestInfo);
@@ -603,16 +677,17 @@ async function run() {
                     }
 
                     const totalMoney = money * (1.5 / 100);
+                    console.log(totalMoney)
 
-                    if(!(totalMoney <= result?.balance)){
-                        return res.send({message : 'Low Balance'})
+                    if (!(totalMoney + money <= result?.balance)) {
+                        return res.send({ message: 'Low Balance' })
                     }
 
                     const requestInfo = {
                         from: result?.phone,
                         to: phoneNumber,
                         balance: balance,
-                        date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a")
+                        date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                     }
 
                     const requestResult = await cashOutRequestCollection.insertOne(requestInfo);
@@ -649,7 +724,7 @@ async function run() {
             console.log(agentCurrentBalance)
 
             if (agentCurrentBalance < balance) {
-                return res.send({ message: 'Your current balance is low' });
+                return res.send({ message: `Sorry! You don't have ${balance} in your account`  });
             }
 
             else {
@@ -675,7 +750,7 @@ async function run() {
                         const updRequest = {
                             $set: {
                                 accepted: true,
-                                date: moment().format("dddd, MMMM Do YYYY, h:mm:ss a"),
+                                date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                             }
                         }
                         const updReqResult = await cashInRequestCollection.updateOne(query, updRequest);
@@ -686,6 +761,73 @@ async function run() {
 
 
         })
+
+        app.post('/agent/confirm/cash-out-request', async (req, res) => {
+            console.log(moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a"))
+            const { id } = req.query;
+            console.log(id);
+            const query = { _id: new ObjectId(id) };
+
+            const result = await cashOutRequestCollection.findOne(query);
+            console.log(result);
+
+            const agentPhone = result?.to;
+            const userPhone = result?.from;
+
+            const balance = result?.balance;
+
+            const agentQuery = { phone: agentPhone };
+            const userQuery = { phone: userPhone }
+
+            const user = await userCollection.findOne(userQuery)
+            const userCurrentBalance = user?.balance;
+
+            // agent
+            const agent = await userCollection.findOne(agentQuery)
+            const agentCurrentBalance = agent?.balance;
+            console.log(agentCurrentBalance)
+
+            if (!(userCurrentBalance >= balance)) {
+                return res.send({ message: `Sorry! User has not ${balance} in his/her account` });
+            }
+
+            const agentUpdBalance = {
+                $set: {
+                    balance: parseInt(agentCurrentBalance) + parseInt(balance)
+                }
+            }
+            const agentResult = await userCollection.updateOne(agentQuery, agentUpdBalance);
+            if (agentResult?.modifiedCount) {
+                // user
+                const user = await userCollection.findOne(userQuery)
+                const userCurrentBalance = user?.balance;
+                console.log(userCurrentBalance)
+
+                const userUpdBalance = {
+                    $set: {
+                        balance: parseInt(userCurrentBalance) - parseInt(balance)
+                    }
+                }
+                const userResult = await userCollection.updateOne(userQuery, userUpdBalance);
+                if (userResult?.modifiedCount) {
+                    const updRequest = {
+                        $set: {
+                            accepted: true,
+                            date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a"),
+                        }
+                    }
+                    const updReqResult = await cashOutRequestCollection.updateOne(query, updRequest);
+                    res.send(updReqResult);
+                }
+            }
+
+
+
+        })
+
+
+
+
 
         // app.post('/logout', async (req, res) => {
         //     const { user } = req.query;
