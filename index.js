@@ -27,7 +27,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
         const database = client.db("paymate");
         const userCollection = database.collection('users');
         const transactionCollection = database.collection('transactions');
@@ -66,10 +66,10 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/verify/logged-in', async (req, res) => {
-            const { user } = req.query;
-            console.log(user);
-        })
+        // app.get('/verify/logged-in', async (req, res) => {
+        //     const { user } = req.query;
+        //     console.log(user);
+        // })
 
         app.get('/check-balance', async (req, res) => {
             const { email } = req.query;
@@ -77,7 +77,9 @@ async function run() {
             const query = { email: email };
             const result = await userCollection.findOne(query);
             console.log(result)
-            const netBalance = result?.balance;
+            const netBalance = parseFloat(result?.balance).toFixed(2);
+            // const netBalance = result?.balance;
+            console.log('net - ', netBalance)
             res.send({ balance: netBalance });
         })
 
@@ -410,6 +412,10 @@ async function run() {
 
                     })
                 }
+                else if (!result) {
+                    res.send({ message: 'Not Registered' })
+                }
+
                 else if (!result?.verified) {
                     res.send({ message: 'Not verified. Try later' })
                 }
@@ -676,10 +682,10 @@ async function run() {
                         return;
                     }
 
-                    const totalMoney = money * (1.5 / 100);
-                    console.log(totalMoney)
+                    const charge = money * (1.5 / 100);
+                    console.log(charge)
 
-                    if (!(totalMoney + money <= result?.balance)) {
+                    if (!(charge + money <= result?.balance)) {
                         return res.send({ message: 'Low Balance' })
                     }
 
@@ -687,6 +693,7 @@ async function run() {
                         from: result?.phone,
                         to: phoneNumber,
                         balance: balance,
+                        charge : charge,
                         date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                     }
 
@@ -713,36 +720,37 @@ async function run() {
             const agentPhone = result?.to;
             const userPhone = result?.from;
 
-            const balance = result?.balance;
+            const balance = parseInt(result?.balance);
+            console.log('b', balance)
 
             const agentQuery = { phone: agentPhone };
             const userQuery = { phone: userPhone }
 
             // agent
             const agent = await userCollection.findOne(agentQuery)
-            const agentCurrentBalance = agent?.balance;
+            const agentCurrentBalance = parseInt(agent?.balance);
             console.log(agentCurrentBalance)
 
             if (agentCurrentBalance < balance) {
-                return res.send({ message: `Sorry! You don't have ${balance} in your account`  });
+                return res.send({ message: `Sorry! You don't have ${balance} in your account` });
             }
 
             else {
                 const agentUpdBalance = {
                     $set: {
-                        balance: parseInt(agentCurrentBalance) - parseInt(balance)
+                        balance: agentCurrentBalance - balance
                     }
                 }
                 const agentResult = await userCollection.updateOne(agentQuery, agentUpdBalance);
                 if (agentResult?.modifiedCount) {
                     // user
                     const user = await userCollection.findOne(userQuery)
-                    const userCurrentBalance = user?.balance;
+                    const userCurrentBalance = parseInt(user?.balance);
                     console.log(userCurrentBalance)
 
                     const userUpdBalance = {
                         $set: {
-                            balance: parseInt(userCurrentBalance) + parseInt(balance)
+                            balance: userCurrentBalance + balance
                         }
                     }
                     const userResult = await userCollection.updateOne(userQuery, userUpdBalance);
@@ -774,38 +782,42 @@ async function run() {
             const agentPhone = result?.to;
             const userPhone = result?.from;
 
-            const balance = result?.balance;
+            const balance = parseInt(result?.balance);
+            console.log('lll', balance)
 
             const agentQuery = { phone: agentPhone };
             const userQuery = { phone: userPhone }
 
             const user = await userCollection.findOne(userQuery)
-            const userCurrentBalance = user?.balance;
+            const userCurrentBalance = parseInt(user?.balance);
+            const totalCharge = balance + (balance * (1.5/100))
+            console.log('ee',totalCharge)
 
             // agent
             const agent = await userCollection.findOne(agentQuery)
-            const agentCurrentBalance = agent?.balance;
+            const agentCurrentBalance = parseInt(agent?.balance);
             console.log(agentCurrentBalance)
+            console.log(agentCurrentBalance + totalCharge);
 
-            if (!(userCurrentBalance >= balance)) {
+            if (!(userCurrentBalance >= totalCharge)) {
                 return res.send({ message: `Sorry! User has not ${balance} in his/her account` });
             }
 
             const agentUpdBalance = {
                 $set: {
-                    balance: parseInt(agentCurrentBalance) + parseInt(balance)
+                    balance: agentCurrentBalance + totalCharge
                 }
             }
             const agentResult = await userCollection.updateOne(agentQuery, agentUpdBalance);
             if (agentResult?.modifiedCount) {
                 // user
-                const user = await userCollection.findOne(userQuery)
-                const userCurrentBalance = user?.balance;
-                console.log(userCurrentBalance)
+                // const user = await userCollection.findOne(userQuery)
+                // const userCurrentBalance = user?.balance;
+                // console.log(userCurrentBalance)
 
                 const userUpdBalance = {
                     $set: {
-                        balance: parseInt(userCurrentBalance) - parseInt(balance)
+                        balance: userCurrentBalance - totalCharge
                     }
                 }
                 const userResult = await userCollection.updateOne(userQuery, userUpdBalance);
@@ -855,7 +867,7 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
