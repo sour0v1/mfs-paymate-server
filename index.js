@@ -398,7 +398,7 @@ async function run() {
                                 .cookie('token', token, {
                                     httpOnly: true,
                                     secure: process.env.NODE_ENV === 'production' || true,
-                                    sameSite: 'none'
+                                    sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
                                 })
                                 .send({ isCorrect: true, role: userRole, });
                         }
@@ -438,7 +438,7 @@ async function run() {
                                 .cookie('token', token, {
                                     httpOnly: true,
                                     secure: process.env.NODE_ENV === 'production' || true,
-                                    sameSite: 'none'
+                                    sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
                                 })
                                 .send({ isCorrect: true, role: userRole });
                         }
@@ -873,19 +873,15 @@ async function run() {
 
         })
 
-
-
-
-
-        // app.post('/logout', verifyToken, async (req, res) => {
-        //     const { user } = req.query;
-        //     console.log(req.user)
-        //     if(req.user?.loggedUser !== user){
-        //        return res.send({message : false})
-        //     }
-        //     res.send({message : true})
-        // })
-
+        app.post("/logout", async (req, res) => {
+            res
+                .clearCookie("token", {
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production' || true,
+                    sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+                })
+                .send({ success: true });
+        });
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
