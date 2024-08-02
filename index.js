@@ -1,16 +1,41 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const jwt = require('jsonwebtoken')
+const cookieParser = require('cookie-parser')
 require('dotenv').config();
 const bycrypt = require('bcryptjs')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 // const moment = require('moment');
 const moment = require('moment-timezone')
 const port = process.env.PORT || 5000;
+const jwtSecret = process.env.JWT_SECRET;
+// console.log(jwtSecret)
 
 // middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173', 'https://mfs-paymate.web.app'],
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser())
+
+// custom middleware
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies?.token;
+    console.log('ttt', token);
+    if (!token) {
+        return res.status(401).send({ message: 'Unauthorized' })
+    }
+    jwt.verify(token, jwtSecret, (errr, userIdentity) => {
+        if (errr) {
+            return res.status(403).send({ message: 'Forbidden' })
+        }
+        console.log('uuu', userIdentity)
+        req.user = userIdentity;
+        next();
+    })
+}
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xhnq0hd.mongodb.net/?appName=Cluster0`;
 // console.log(uri)
@@ -45,6 +70,8 @@ async function run() {
                 const query = { email: userIdentity }
                 const result = await userCollection.findOne(query);
                 res.send(result);
+                // res.status().send
+
             }
             else {
                 const query = { phone: userIdentity };
@@ -54,13 +81,13 @@ async function run() {
         })
 
         // admin
-        app.get('/all-agents', async (req, res) => {
+        app.get('/all-agents', verifyToken, async (req, res) => {
             const query = { role: 'agent' }
             const result = await userCollection.find(query).toArray()
             res.send(result);
         })
 
-        app.get('/all-users', async (req, res) => {
+        app.get('/all-users', verifyToken, async (req, res) => {
             const query = { role: 'user' }
             const result = await userCollection.find(query).toArray()
             res.send(result);
@@ -71,7 +98,8 @@ async function run() {
         //     console.log(user);
         // })
 
-        app.get('/check-balance', async (req, res) => {
+        app.get('/check-balance', verifyToken, async (req, res) => {
+            console.log('hhhho', req.user)
             const { email } = req.query;
             console.log(email);
             const query = { email: email };
@@ -83,7 +111,7 @@ async function run() {
             res.send({ balance: netBalance });
         })
 
-        app.get('/user/check-number', async (req, res) => {
+        app.get('/user/check-number', verifyToken, async (req, res) => {
             const { phone } = req.query;
             console.log(phone);
             const query = { phone: phone }
@@ -99,7 +127,7 @@ async function run() {
             }
         })
 
-        app.get('/agent/check-number', async (req, res) => {
+        app.get('/agent/check-number', verifyToken, async (req, res) => {
             const { phone } = req.query;
             console.log(phone);
             const query = { phone: phone }
@@ -115,7 +143,7 @@ async function run() {
             }
         })
 
-        app.get('/agent/cash-in-requests', async (req, res) => {
+        app.get('/agent/cash-in-requests', verifyToken, async (req, res) => {
             const { agent } = req.query;
             console.log('ll', agent);
 
@@ -141,7 +169,7 @@ async function run() {
 
         })
 
-        app.get('/agent/cash-out-requests', async (req, res) => {
+        app.get('/agent/cash-out-requests', verifyToken, async (req, res) => {
             const { agent } = req.query;
             console.log('ll', agent);
 
@@ -168,7 +196,7 @@ async function run() {
         })
 
 
-        app.get('/user/transaction/send-money', async (req, res) => {
+        app.get('/user/transaction/send-money', verifyToken, async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -192,7 +220,7 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/user/transaction/recieve-money', async (req, res) => {
+        app.get('/user/transaction/recieve-money', verifyToken, async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -216,7 +244,7 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/user/transaction/cash-in', async (req, res) => {
+        app.get('/user/transaction/cash-in', verifyToken, async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -240,7 +268,7 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/user/transaction/cash-out', async (req, res) => {
+        app.get('/user/transaction/cash-out', verifyToken, async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -264,7 +292,7 @@ async function run() {
             res.send(result);
         })
 
-        app.get('/agent/transaction/cash-in', async (req, res) => {
+        app.get('/agent/transaction/cash-in', verifyToken, async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -287,7 +315,7 @@ async function run() {
             return res.send(result);
         })
 
-        app.get('/agent/transaction/cash-out', async (req, res) => {
+        app.get('/agent/transaction/cash-out', verifyToken, async (req, res) => {
             const { userIdentity } = req.query;
 
             const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -310,7 +338,7 @@ async function run() {
             return res.send(result);
         })
 
-        app.post('/verify-user', async (req, res) => {
+        app.post('/verify-user', verifyToken, async (req, res) => {
             const { id } = req.query;
             console.log(id);
             const query = { _id: new ObjectId(id) };
@@ -327,7 +355,7 @@ async function run() {
             console.log(updInfo);
         })
 
-        app.post('/verify-agent', async (req, res) => {
+        app.post('/verify-agent', verifyToken, async (req, res) => {
             const { id } = req.query;
             console.log(id);
             const query = { _id: new ObjectId(id) };
@@ -354,13 +382,6 @@ async function run() {
 
             console.log(checkMail);
 
-            // // for private route
-            // const updateLogInfo = {
-            //     $set: {
-            //         loggedIn: true,
-            //     }
-            // }
-
             if (checkMail) {
                 const query = { email: userIdentity };
                 console.log('email query -', query);
@@ -371,8 +392,15 @@ async function run() {
                     bycrypt.compare(password, result?.password, async (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            // const loggedResult = await userCollection.updateOne(query, updateLogInfo)
-                            res.send({ isCorrect: true, role: userRole, });
+                            const token = jwt.sign({ loggedUser: userIdentity }, jwtSecret, { expiresIn: '1h' })
+                            console.log(token)
+                            res
+                                .cookie('token', token, {
+                                    httpOnly: true,
+                                    secure: process.env.NODE_ENV === 'production' || true,
+                                    sameSite: 'none'
+                                })
+                                .send({ isCorrect: true, role: userRole, });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -403,8 +431,16 @@ async function run() {
                     bycrypt.compare(password, result?.password, async (err, response) => {
                         console.log('yes', response);
                         if (response === true) {
-                            // const loggedResult = await userCollection.updateOne(query, updateLogInfos)
-                            res.send({ isCorrect: true, role: userRole });
+                            const token = jwt.sign({ loggedUser: userIdentity }, jwtSecret, { expiresIn: '1h' })
+                            console.log(token)
+
+                            res
+                                .cookie('token', token, {
+                                    httpOnly: true,
+                                    secure: process.env.NODE_ENV === 'production' || true,
+                                    sameSite: 'none'
+                                })
+                                .send({ isCorrect: true, role: userRole });
                         }
                         else {
                             res.send({ message: 'Wrong Password' })
@@ -471,7 +507,7 @@ async function run() {
             })
         })
 
-        app.post('/user/confirm/send-money', async (req, res) => {
+        app.post('/user/confirm/send-money', verifyToken, async (req, res) => {
             const { balance, password, phoneNumber, userIdentity } = req.body;
             console.log(balance, password, phoneNumber, userIdentity);
             const money = parseInt(balance);
@@ -597,7 +633,7 @@ async function run() {
 
         })
 
-        app.post('/user/request/cash-in', async (req, res) => {
+        app.post('/user/request/cash-in', verifyToken, async (req, res) => {
             const { balance, password, phoneNumber, userIdentity } = req.body;
             console.log(balance, password, phoneNumber, userIdentity);
             const money = parseInt(balance);
@@ -649,7 +685,7 @@ async function run() {
 
         })
 
-        app.post('/user/request/cash-out', async (req, res) => {
+        app.post('/user/request/cash-out', verifyToken, async (req, res) => {
             const { balance, password, phoneNumber, userIdentity } = req.body;
             console.log(balance, password, phoneNumber, userIdentity);
             const money = parseInt(balance);
@@ -693,7 +729,7 @@ async function run() {
                         from: result?.phone,
                         to: phoneNumber,
                         balance: balance,
-                        charge : charge,
+                        charge: charge,
                         date: moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a")
                     }
 
@@ -709,7 +745,7 @@ async function run() {
 
         })
 
-        app.post('/agent/confirm/cash-in-request', async (req, res) => {
+        app.post('/agent/confirm/cash-in-request', verifyToken, async (req, res) => {
             const { id } = req.query;
             console.log(id);
             const query = { _id: new ObjectId(id) };
@@ -770,7 +806,7 @@ async function run() {
 
         })
 
-        app.post('/agent/confirm/cash-out-request', async (req, res) => {
+        app.post('/agent/confirm/cash-out-request', verifyToken, async (req, res) => {
             console.log(moment.tz('Asia/Dhaka').format("dddd, MMMM Do YYYY, h:mm:ss a"))
             const { id } = req.query;
             console.log(id);
@@ -790,8 +826,8 @@ async function run() {
 
             const user = await userCollection.findOne(userQuery)
             const userCurrentBalance = parseInt(user?.balance);
-            const totalCharge = balance + (balance * (1.5/100))
-            console.log('ee',totalCharge)
+            const totalCharge = balance + (balance * (1.5 / 100))
+            console.log('ee', totalCharge)
 
             // agent
             const agent = await userCollection.findOne(agentQuery)
@@ -841,28 +877,13 @@ async function run() {
 
 
 
-        // app.post('/logout', async (req, res) => {
+        // app.post('/logout', verifyToken, async (req, res) => {
         //     const { user } = req.query;
-        //     console.log(user)
-
-        //     const emailRegEx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        //     const checkMail = emailRegEx.test(user);
-        //     let yourQuery = ' ';
-        //     if (checkMail) {
-        //         yourQuery = { email: user }
+        //     console.log(req.user)
+        //     if(req.user?.loggedUser !== user){
+        //        return res.send({message : false})
         //     }
-        //     else {
-        //         yourQuery = { phone: user }
-        //     }
-
-        //     const updatedLogInfo = {
-        //         $set : {
-        //             loggedIn : false,
-        //         }
-        //     }
-
-        //     const result = await userCollection.updateOne(yourQuery, updatedLogInfo)
-        //     res.send(result);
+        //     res.send({message : true})
         // })
 
 
