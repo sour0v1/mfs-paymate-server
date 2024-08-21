@@ -16,9 +16,16 @@ cd mfs-paymate-server
 ```
 npm install
 ```
-**3. Create .env file :**
+**3. Create .env File :**
 ```
 MONGODB_URI=<your-mongodb-uri>
 JWT_SECRET=<your-jwt-secret>
 
 ```
+**4. Start the Server**
+```
+node index.js
+```
+## Security
+- **JWT Authentication:** Secure routes using JWT tokens.
+- **Password Encryption:** User passwords are encrypted using bcrypt.js before storing in the database.
