@@ -1,5 +1,5 @@
-# Paymate - Server Side
-This repository contains the server-side code for the [Paymate - Client Side](https://github.com/sour0v1/mfs-paymate-client). The server handles user authentication, transactions, cash-in/cash-out requests,
+# mfs-paymate-server
+This repository contains the server-side code for the [mfs-paymate-client](https://github.com/sour0v1/mfs-paymate-client). The server handles user authentication, transactions, cash-in/cash-out requests,
 and provides data to the client-side application.
 
 ## Features
