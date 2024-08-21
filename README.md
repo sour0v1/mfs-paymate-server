@@ -12,3 +12,13 @@ and provides data to the client-side application.
 git clone https://github.com/sour0v1/mfs-paymate-server.git
 cd mfs-paymate-server
 ```
+**2. Install dependencies :**
+```
+npm install
+```
+**3. Create .env file :**
+```
+MONGODB_URI=<your-mongodb-uri>
+JWT_SECRET=<your-jwt-secret>
+
+```
